@@ -1,6 +1,6 @@
 use std::iter;
 
-use cgmath::{prelude::*, Vector3};
+use cgmath::{prelude::*, Quaternion, Vector3};
 use wgpu::util::DeviceExt;
 use winit::{
     event::*,
@@ -8,7 +8,7 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-#[cfg(target_arch="wasm32")]
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
 mod texture;
@@ -41,8 +41,6 @@ impl Vertex {
         }
     }
 }
-
-
 
 fn vertex(pos: [i8; 3], tc: [i8; 2]) -> Vertex {
     Vertex {
@@ -97,20 +95,12 @@ fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
     (vertex_data.to_vec(), index_data.to_vec())
 }
 
-
 #[rustfmt::skip]
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
     1.0, 0.0, 0.0, 0.0,
     0.0, 1.0, 0.0, 0.0,
     0.0, 0.0, 0.5, 0.0,
     0.0, 0.0, 0.5, 1.0,
-);
-
-const NUM_INSTANCES_PER_ROW: u32 = 10;
-const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
-    NUM_INSTANCES_PER_ROW as f32 * 0.5,
-    0.0,
-    NUM_INSTANCES_PER_ROW as f32 * 0.5,
 );
 
 struct Camera {
@@ -439,28 +429,32 @@ impl State {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
+        let radius = 11;
+        let smoothing = 11;
+        let NUM_INSTANCES_PER_ROW = radius * 2;
+
+        let mid = NUM_INSTANCES_PER_ROW as f32 / 2.;
         let instances = (0..NUM_INSTANCES_PER_ROW)
             .flat_map(|z| {
-                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                    let position = cgmath::Vector3 {
-                        x: x as f32,
-                        y: 0.0,
-                        z: z as f32,
-                    } * 3.;
+                (0..NUM_INSTANCES_PER_ROW).flat_map(move |y| {
+                    (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                        let position = cgmath::Vector3 {
+                            x: x as f32,
+                            y: y as f32,
+                            z: z as f32,
+                        } * 2.;
 
-                    let rotation = if position.is_zero() {
-                        // this is needed so an object at (0, 0, 0) won't get scaled to zero
-                        // as Quaternions can effect scale if they're not created correctly
-                        cgmath::Quaternion::from_axis_angle(
-                            cgmath::Vector3::unit_z(),
-                            cgmath::Deg(0.0),
-                        )
-                    } else {
-                        cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
-                    };
+                        let rotation = Quaternion::zero();
 
-                    Instance { position, rotation }
+                        Instance { position, rotation }
+                    })
                 })
+            })
+            .filter(|instance| {
+                instance.position.distance(Vector3::new(mid, mid, mid)) <= smoothing as f32
+                    && instance.position.x <= (radius * 2) as f32
+                    && instance.position.y <= (radius * 2) as f32
+                    && instance.position.z <= (radius * 2) as f32
             })
             .collect::<Vec<_>>();
 
@@ -560,7 +554,7 @@ impl State {
             multiview: None,
         });
 
-let (VERTICES, INDICES) = create_vertices();
+        let (VERTICES, INDICES) = create_vertices();
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
@@ -678,7 +672,7 @@ let (VERTICES, INDICES) = create_vertices();
     }
 }
 
-#[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
 pub async fn run() {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
@@ -698,7 +692,7 @@ pub async fn run() {
         // the size manually when on web.
         use winit::dpi::PhysicalSize;
         window.set_inner_size(PhysicalSize::new(450, 400));
-        
+
         use winit::platform::web::WindowExtWebSys;
         web_sys::window()
             .and_then(|win| win.document())
@@ -710,7 +704,7 @@ pub async fn run() {
             })
             .expect("Couldn't append canvas to document body.");
     }
-    
+
     // State::new uses async code, so we're going to wait for it to finish
     let mut state = State::new(&window).await;
 
@@ -748,7 +742,9 @@ pub async fn run() {
                 match state.render() {
                     Ok(_) => {}
                     // Reconfigure the surface if it's lost or outdated
-                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => state.resize(state.size),
+                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                        state.resize(state.size)
+                    }
                     // The system is out of memory, we should probably quit
                     Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
                     // We're ignoring timeouts
