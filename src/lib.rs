@@ -16,6 +16,43 @@ use camera::{Camera, CameraController, CameraUniform};
 
 mod texture;
 
+pub const CHUNK_SIZE: usize = 16;
+
+#[derive(Clone, Copy)]
+enum Block {
+    Air,
+    Grass,
+}
+
+pub struct Chunk {
+    blocks: Box<[[[Block; 16]; 16]; 16]>,
+}
+
+impl Chunk {
+    fn instances(&self) -> Vec<InstanceRaw> {
+        (0..CHUNK_SIZE)
+            .flat_map(|z| {
+                (0..CHUNK_SIZE).flat_map(move |y| {
+                    (0..CHUNK_SIZE).filter_map(move |x| match self.blocks[x][y][z] {
+                        Block::Air => None,
+                        Block::Grass => {
+                            let position = cgmath::Vector3 {
+                                x: x as f32,
+                                y: y as f32,
+                                z: z as f32,
+                            } * 2.;
+                            let rotation = Quaternion::zero();
+                            let instance = Instance { position, rotation };
+
+                            Some(instance.to_raw())
+                        }
+                    })
+                })
+            })
+            .collect()
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
@@ -177,7 +214,7 @@ struct State {
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
-    instances: Vec<Instance>,
+    instances: Vec<InstanceRaw>,
 
     instance_buffer: wgpu::Buffer,
     // NEW!
@@ -289,39 +326,17 @@ impl State {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let radius = 11;
-        let smoothing = 22;
-        let distance = radius * 2;
+        let mut chunk = Chunk {
+            blocks: Box::new([[[Block::Grass; 16]; 16]; 16]),
+        };
+        for block in &mut chunk.blocks[8][8][0..] {
+            *block = Block::Air;
+        }
 
-        let mid = distance as f32 / 2.;
-        let instances = (0..distance)
-            .flat_map(|z| {
-                (0..distance).flat_map(move |y| {
-                    (0..distance).map(move |x| {
-                        let position = cgmath::Vector3 {
-                            x: x as f32,
-                            y: y as f32,
-                            z: z as f32,
-                        } * 2.;
-
-                        let rotation = Quaternion::zero();
-
-                        Instance { position, rotation }
-                    })
-                })
-            })
-            .filter(|instance| {
-                instance.position.distance(Vector3::new(mid, mid, mid)) < smoothing as f32
-                    && instance.position.x < (radius * 2) as f32
-                    && instance.position.y < (radius * 2) as f32
-                    && instance.position.z < (radius * 2) as f32
-            })
-            .collect::<Vec<_>>();
-
-        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
+        let instances = chunk.instances();
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Instance Buffer"),
-            contents: bytemuck::cast_slice(&instance_data),
+            contents: bytemuck::cast_slice(&instances),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
@@ -515,53 +530,6 @@ impl State {
                     stencil_ops: None,
                 }),
             });
-
-            let radius = 11i32;
-            let distance = radius * 2;
-
-            let mid = distance as f32 / 2.;
-            let mid_v = Vector3::new(mid, mid, mid);
-            let smoothing = (distance.pow(2) as f32
-                / self.camera.eye.distance(Point3::new(mid, mid, mid)))
-            .max(radius as f32)
-            .min(distance as f32);
-
-            self.instances = (0..distance)
-                .flat_map(|z| {
-                    (0..distance).flat_map(move |y| {
-                        (0..distance).map(move |x| {
-                            let position = cgmath::Vector3 {
-                                x: x as f32,
-                                y: y as f32,
-                                z: z as f32,
-                            } * 2.;
-
-                            let rotation = Quaternion::zero();
-
-                            Instance { position, rotation }
-                        })
-                    })
-                })
-                .filter(|instance| {
-                    instance.position.distance(mid_v) < smoothing as f32
-                        && instance.position.x < (radius * 2) as f32
-                        && instance.position.y < (radius * 2) as f32
-                        && instance.position.z < (radius * 2) as f32
-                })
-                .collect::<Vec<_>>();
-
-            let instance_data = self
-                .instances
-                .iter()
-                .map(Instance::to_raw)
-                .collect::<Vec<_>>();
-            self.instance_buffer =
-                self.device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("Instance Buffer"),
-                        contents: bytemuck::cast_slice(&instance_data),
-                        usage: wgpu::BufferUsages::VERTEX,
-                    });
 
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             render_pass.set_pipeline(&self.render_pipeline);
