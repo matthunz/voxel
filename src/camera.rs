@@ -1,5 +1,5 @@
 use cgmath::{InnerSpace, SquareMatrix};
-use winit::event::{VirtualKeyCode, WindowEvent, KeyboardInput, ElementState};
+use winit::event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
 
 #[rustfmt::skip]
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
@@ -112,7 +112,7 @@ impl CameraController {
         }
     }
 
-   pub fn update_camera(&self, camera: &mut Camera) {
+    pub fn update_camera(&self, camera: &mut Camera) {
         let forward = camera.target - camera.eye;
         let forward_norm = forward.normalize();
         let forward_mag = forward.magnitude();

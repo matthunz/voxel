@@ -1,5 +1,5 @@
 use crate::{Instance, InstanceRaw};
-use cgmath::{Quaternion, Vector3, Zero};
+use cgmath::{Quaternion, Vector3, Zero, Vector2};
 
 #[derive(Clone, Copy)]
 pub enum Block {
@@ -12,7 +12,7 @@ pub struct Chunk<const W: usize, const H: usize> {
 }
 
 impl<const W: usize, const H: usize> Chunk<W, H> {
-    pub fn instances(&self, bottom_left: Vector3<f32>) -> Vec<InstanceRaw> {
+    pub fn instances(&self, bottom_left: Vector2<f32>) -> Vec<InstanceRaw> {
         (0..H)
             .flat_map(|y| {
                 (0..W).flat_map(move |x| {
@@ -20,11 +20,11 @@ impl<const W: usize, const H: usize> Chunk<W, H> {
                         Block::Air => None,
                         Block::Grass => {
                             let position = cgmath::Vector3 {
-                                x: x as f32,
-                                y: y as f32,
-                                z: z as f32,
-                            } * 2.
-                                + bottom_left;
+                                x: x as f32 + bottom_left.x,
+                                y: y as f32, 
+                                z: z as f32 + bottom_left.y,
+                            } * 2.;
+                               
                             let rotation = Quaternion::zero();
                             let instance = Instance { position, rotation };
 

@@ -1,6 +1,6 @@
 use std::iter;
 
-use cgmath::{Vector3, Zero};
+use cgmath::{Vector2, Vector3, Zero};
 use wgpu::util::DeviceExt;
 use winit::{
     event::*,
@@ -15,8 +15,8 @@ mod camera;
 use camera::{Camera, CameraController, CameraUniform};
 
 mod world;
-use world::Block;
 pub use world::Chunk;
+use world::{Block, World};
 
 mod texture;
 
@@ -181,11 +181,9 @@ struct State {
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
-    instances: Vec<InstanceRaw>,
-
-    instance_buffer: wgpu::Buffer,
     // NEW!
     depth_texture: texture::Texture,
+    world: World,
 }
 
 impl State {
@@ -301,12 +299,7 @@ impl State {
                 }
             }
         }
-        let instances = chunk.instances(Vector3::zero());
-        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Instance Buffer"),
-            contents: bytemuck::cast_slice(&instances),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
+       
 
         let camera_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -411,6 +404,12 @@ impl State {
         });
         let num_indices = indices.len() as u32;
 
+        let mut world = World::default();
+   
+        world.insert(Vector2::new(0, 0), Chunk::from(Block::Grass), &device);
+        world.insert(Vector2::new(16, 16), Chunk::from(Block::Grass), &device);
+
+
         Self {
             surface,
             device,
@@ -428,9 +427,8 @@ impl State {
             camera_buffer,
             camera_bind_group,
             camera_uniform,
-            instances,
-            instance_buffer,
             depth_texture,
+            world,
         }
     }
 
@@ -499,13 +497,13 @@ impl State {
                 }),
             });
 
-            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
             render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..self.instances.len() as u32);
+        
+            self.world.render(&mut render_pass, 0..self.num_indices);
         }
 
         self.queue.submit(iter::once(encoder.finish()));
