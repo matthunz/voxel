@@ -1,6 +1,6 @@
 use std::iter;
 
-use cgmath::{prelude::*, Point3, Quaternion, Vector3};
+use cgmath::{Vector3, Zero};
 use wgpu::util::DeviceExt;
 use winit::{
     event::*,
@@ -14,44 +14,11 @@ use wasm_bindgen::prelude::*;
 mod camera;
 use camera::{Camera, CameraController, CameraUniform};
 
+mod world;
+use world::Block;
+pub use world::Chunk;
+
 mod texture;
-
-pub const CHUNK_SIZE: usize = 16;
-
-#[derive(Clone, Copy)]
-enum Block {
-    Air,
-    Grass,
-}
-
-pub struct Chunk {
-    blocks: Box<[[[Block; 16]; 16]; 16]>,
-}
-
-impl Chunk {
-    fn instances(&self) -> Vec<InstanceRaw> {
-        (0..CHUNK_SIZE)
-            .flat_map(|z| {
-                (0..CHUNK_SIZE).flat_map(move |y| {
-                    (0..CHUNK_SIZE).filter_map(move |x| match self.blocks[x][y][z] {
-                        Block::Air => None,
-                        Block::Grass => {
-                            let position = cgmath::Vector3 {
-                                x: x as f32,
-                                y: y as f32,
-                                z: z as f32,
-                            } * 2.;
-                            let rotation = Quaternion::zero();
-                            let instance = Instance { position, rotation };
-
-                            Some(instance.to_raw())
-                        }
-                    })
-                })
-            })
-            .collect()
-    }
-}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -135,7 +102,7 @@ fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
     (vertex_data.to_vec(), index_data.to_vec())
 }
 
-struct Instance {
+pub struct Instance {
     position: cgmath::Vector3<f32>,
     rotation: cgmath::Quaternion<f32>,
 }
@@ -152,7 +119,7 @@ impl Instance {
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct InstanceRaw {
+pub struct InstanceRaw {
     #[allow(dead_code)]
     model: [[f32; 4]; 4],
 }
@@ -326,14 +293,15 @@ impl State {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let mut chunk = Chunk {
-            blocks: Box::new([[[Block::Grass; 16]; 16]; 16]),
-        };
-        for block in &mut chunk.blocks[8][8][0..] {
-            *block = Block::Air;
+        let mut chunk: Chunk<16, 256> = Chunk::from(Block::Grass);
+        for row in &mut chunk.blocks[6..] {
+            for col in &mut row[0..] {
+                for block in &mut col[0..] {
+                    *block = Block::Air;
+                }
+            }
         }
-
-        let instances = chunk.instances();
+        let instances = chunk.instances(Vector3::zero());
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Instance Buffer"),
             contents: bytemuck::cast_slice(&instances),
