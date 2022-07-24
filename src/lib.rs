@@ -1,6 +1,6 @@
 use std::iter;
 
-use cgmath::prelude::*;
+use cgmath::{prelude::*, Vector3};
 use wgpu::util::DeviceExt;
 use winit::{
     event::*,
@@ -420,7 +420,7 @@ impl State {
         });
 
         let camera = Camera {
-            eye: (0.0, 5.0, 10.0).into(),
+            eye: (0.0, 20.0, 20.0).into(),
             target: (0.0, 0.0, 0.0).into(),
             up: cgmath::Vector3::unit_y(),
             aspect: config.width as f32 / config.height as f32,
@@ -446,7 +446,7 @@ impl State {
                         x: x as f32,
                         y: 0.0,
                         z: z as f32,
-                    } - INSTANCE_DISPLACEMENT;
+                    } * 3.;
 
                     let rotation = if position.is_zero() {
                         // this is needed so an object at (0, 0, 0) won't get scaled to zero
