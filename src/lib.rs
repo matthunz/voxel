@@ -299,7 +299,6 @@ impl State {
                 }
             }
         }
-       
 
         let camera_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -405,10 +404,9 @@ impl State {
         let num_indices = indices.len() as u32;
 
         let mut world = World::default();
-   
+
         world.insert(Vector2::new(0, 0), Chunk::from(Block::Grass), &device);
         world.insert(Vector2::new(16, 16), Chunk::from(Block::Grass), &device);
-
 
         Self {
             surface,
@@ -502,7 +500,7 @@ impl State {
             render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        
+
             self.world.render(&mut render_pass, 0..self.num_indices);
         }
 

@@ -1,5 +1,8 @@
 mod chunk;
-use std::{collections::HashMap, ops::{Index, Range}};
+use std::{
+    collections::HashMap,
+    ops::{Index, Range},
+};
 
 use cgmath::{InnerSpace, Vector2, Vector3, Zero};
 pub use chunk::*;
@@ -24,22 +27,24 @@ impl World {
     }
 
     pub fn render<'a: 'b, 'b>(&'a self, render_pass: &mut RenderPass<'b>, indices: Range<u32>) {
-        for (chunk, instance_buffer, instances) in self.chunks.values(){
+        for (chunk, instance_buffer, instances) in self.chunks.values() {
             render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
             render_pass.draw_indexed(indices.clone(), 0, 0..instances.len() as u32);
         }
     }
 
     pub fn chunk(&mut self, block: Vector2<usize>) -> Option<&mut Chunk<16, 256>> {
-        let idx = block % 16;
+        let idx = block / 16;
+        dbg!(&idx);
         self.chunks.get_mut(&idx).map(|(chunk, _, _)| chunk)
     }
 
     pub fn block_mut(&mut self, block: Vector3<usize>) -> Option<&mut Block> {
+        let idx = block % 16;
         self.chunk(Vector2 {
             x: block.x,
             y: block.y,
         })
-        .map(|chunk| &mut chunk.blocks[block.y][block.x][block.z])
+        .map(|chunk| &mut chunk.blocks[idx.y][idx.x][idx.z])
     }
 }
